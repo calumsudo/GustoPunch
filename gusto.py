@@ -10,7 +10,7 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
-from selenium.common.exceptions import TimeoutException, WebDriverException
+from selenium.common.exceptions import TimeoutException, WebDriverException, NoSuchElementException
 from webdriver_manager.chrome import ChromeDriverManager
 
 # Set up logging
@@ -293,6 +293,17 @@ class GustoPunchApp(rumps.App):
                 )
             )
             password_input.send_keys(self.config["password"])
+            
+            # Check for Remember this device checkbox and select it
+            try:
+                remember_checkbox = WebDriverWait(temp_driver, 3).until(
+                    EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='checkbox'][name='remember']"))
+                )
+                if not remember_checkbox.is_selected():
+                    remember_checkbox.click()
+                    logger.info("Selected 'Remember this device' checkbox")
+            except TimeoutException:
+                logger.info("No 'Remember this device' checkbox found on password page")
 
             # Find submit button
             submit_button = WebDriverWait(temp_driver, 5).until(
@@ -319,10 +330,25 @@ class GustoPunchApp(rumps.App):
                     code = response.text.strip()
                     if code:
                         code_input.send_keys(code)
+                        
+                        # Check for Remember this device checkbox on 2FA page and select it
+                        try:
+                            remember_checkbox = WebDriverWait(temp_driver, 3).until(
+                                EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='checkbox'][name='remember']"))
+                            )
+                            if not remember_checkbox.is_selected():
+                                remember_checkbox.click()
+                                logger.info("Selected 'Remember this device' checkbox on 2FA page")
+                        except TimeoutException:
+                            logger.info("No 'Remember this device' checkbox found on 2FA page")
+                        
                         submit_button = temp_driver.find_element(
                             By.CSS_SELECTOR, "button[type='submit']"
                         )
                         submit_button.click()
+
+                        # Check for Remember Device page after 2FA
+                        self.handle_remember_device_page(temp_driver)
 
                         # Wait for successful login
                         WebDriverWait(temp_driver, 10).until(
@@ -346,6 +372,10 @@ class GustoPunchApp(rumps.App):
                     return
             except TimeoutException:
                 # No 2FA needed or we're already logged in
+                
+                # Check for Remember Device page after login
+                self.handle_remember_device_page(temp_driver)
+                
                 try:
                     WebDriverWait(temp_driver, 10).until(
                         EC.presence_of_element_located(
@@ -381,6 +411,25 @@ class GustoPunchApp(rumps.App):
                     temp_driver.quit()
                 except Exception:
                     pass
+
+    def handle_remember_device_page(self, driver):
+        """Handle the 'Remember this device' page that may appear after 2FA"""
+        try:
+            # Look for the Remember this device button
+            remember_btn = WebDriverWait(driver, 5).until(
+                EC.element_to_be_clickable((By.XPATH, "//button[.//span[contains(text(), 'Remember this device')]]"))
+            )
+            logger.info("Found 'Remember this device' button, clicking it")
+            remember_btn.click()
+            # Give it a moment to process
+            time.sleep(1)
+            return True
+        except TimeoutException:
+            logger.info("No 'Remember this device' page found, continuing...")
+            return False
+        except Exception as e:
+            logger.error(f"Error handling remember device page: {e}")
+            return False
 
     def get_chrome_driver(self):
         """Configure and return Chrome driver with user profile"""
@@ -511,6 +560,17 @@ class GustoPunchApp(rumps.App):
                 password_input.send_keys(self.config["password"])
                 logger.info("Password entered")
 
+                # Check for Remember this device checkbox and select it
+                try:
+                    remember_checkbox = wait.until(
+                        EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='checkbox'][name='remember']"))
+                    )
+                    if not remember_checkbox.is_selected():
+                        remember_checkbox.click()
+                        logger.info("Selected 'Remember this device' checkbox")
+                except TimeoutException:
+                    logger.info("No 'Remember this device' checkbox found on password page")
+
                 # Look for Continue/Submit button
                 logger.info("Looking for submit button...")
                 submit_button = wait.until(
@@ -540,11 +600,26 @@ class GustoPunchApp(rumps.App):
                         code = response.text.strip()
                         if code:
                             code_input.send_keys(code)
+                            
+                            # Check for Remember this device checkbox on 2FA page and select it
+                            try:
+                                remember_checkbox = wait.until(
+                                    EC.presence_of_element_located((By.CSS_SELECTOR, "input[type='checkbox'][name='remember']"))
+                                )
+                                if not remember_checkbox.is_selected():
+                                    remember_checkbox.click()
+                                    logger.info("Selected 'Remember this device' checkbox on 2FA page")
+                            except TimeoutException:
+                                logger.info("No 'Remember this device' checkbox found on 2FA page")
+                            
                             submit_button = driver.find_element(
                                 By.CSS_SELECTOR, "button[type='submit']"
                             )
                             submit_button.click()
                             logger.info("2FA code submitted")
+                            
+                            # Check for Remember Device page after 2FA
+                            self.handle_remember_device_page(driver)
                         else:
                             logger.error("Empty 2FA code provided")
                             return False
@@ -554,6 +629,9 @@ class GustoPunchApp(rumps.App):
 
                 except TimeoutException:
                     logger.info("No 2FA required")
+                
+                # Check for Remember Device page after login/2FA
+                self.handle_remember_device_page(driver)
 
                 # Wait for successful login
                 try:
@@ -573,7 +651,6 @@ class GustoPunchApp(rumps.App):
                     return False
 
             except TimeoutException:
-                
                 return False
 
         except Exception as e:
@@ -672,12 +749,17 @@ class GustoPunchApp(rumps.App):
                 self.update_menu_state()  # Update menu after status change
             except TimeoutException:
                 # Neither button found
-                self.status = "unknown"
-                self.title = "⏱"
-                self.clock_in_time = None
-                self.save_timer_state()
-                self.update_timer(None)
-                self.update_menu_state()  # Update menu after status change
+                # Check for "Remember this device" page before giving up
+                if self.handle_remember_device_page(driver):
+                    # Try again after handling remember device page
+                    self.check_status_from_driver(driver)
+                else:
+                    self.status = "unknown"
+                    self.title = "⏱"
+                    self.clock_in_time = None
+                    self.save_timer_state()
+                    self.update_timer(None)
+                    self.update_menu_state()  # Update menu after status change
 
     def clock_in(self, _):
         """Clock in to Gusto"""
@@ -726,6 +808,9 @@ class GustoPunchApp(rumps.App):
                             sound=False,
                         )
                         return
+
+                # Check for "Remember this device" page
+                self.handle_remember_device_page(self.driver)
 
                 # Wait for clock in/out button
                 selector = f"[data-dd-action-name='Clock {action_text}']"
