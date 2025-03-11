@@ -11,6 +11,7 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException, WebDriverException
+from webdriver_manager.chrome import ChromeDriverManager
 
 # Set up logging
 logging.basicConfig(
@@ -21,7 +22,7 @@ logging.basicConfig(
         logging.StreamHandler(),
     ],
 )
-logger = logging.getLogger("GustoClock")
+logger = logging.getLogger("GustoPunch")
 
 
 class GustoPunchApp(rumps.App):
@@ -54,7 +55,7 @@ class GustoPunchApp(rumps.App):
         ]
 
         # Configuration
-        self.config_file = os.path.expanduser("~/.gusto_clock_config.json")
+        self.config_file = os.path.expanduser("~/.gusto_punch_config.json")
         self.config = self.load_config()
 
         # Load saved clock-in time if exists
@@ -141,11 +142,11 @@ class GustoPunchApp(rumps.App):
         success = self.init_browser_session()
         if success:
             rumps.notification(
-                "Gusto Clock", "Session", "Browser session restarted", sound=False
+                "Gusto Punch", "Session", "Browser session restarted", sound=False
             )
         else:
             rumps.notification(
-                "Gusto Clock",
+                "Gusto Punch",
                 "Session",
                 "Failed to restart browser session",
                 sound=False,
@@ -168,7 +169,7 @@ class GustoPunchApp(rumps.App):
     def load_timer_state(self):
         """Load saved timer state"""
         try:
-            timer_file = os.path.expanduser("~/.gusto_clock_timer.json")
+            timer_file = os.path.expanduser("~/.gusto_punch_timer.json")
             if os.path.exists(timer_file):
                 with open(timer_file, "r") as f:
                     data = json.load(f)
@@ -181,7 +182,7 @@ class GustoPunchApp(rumps.App):
     def save_timer_state(self):
         """Save timer state"""
         try:
-            timer_file = os.path.expanduser("~/.gusto_clock_timer.json")
+            timer_file = os.path.expanduser("~/.gusto_punch_timer.json")
             with open(timer_file, "w") as f:
                 json.dump({"clock_in_time": self.clock_in_time}, f)
         except Exception as e:
@@ -229,7 +230,7 @@ class GustoPunchApp(rumps.App):
         # Get email
         response = rumps.Window(
             "Please enter your Gusto email:",
-            "Gusto Clock Setup",
+            "Gusto Punch Setup",
             dimensions=(320, 100),
             ok="Next",
             cancel="Cancel",
@@ -241,7 +242,7 @@ class GustoPunchApp(rumps.App):
             # Now get password
             response = rumps.Window(
                 "Please enter your Gusto password:",
-                "Gusto Clock Setup",
+                "Gusto Punch Setup",
                 dimensions=(320, 100),
                 secure=True,
                 ok="Save",
@@ -386,7 +387,7 @@ class GustoPunchApp(rumps.App):
         options = Options()
 
         # Set up user data directory
-        user_data_dir = os.path.expanduser("~/.gusto_clock_chrome_profile")
+        user_data_dir = os.path.expanduser("~/.gusto_punch_chrome_profile")
         if not os.path.exists(user_data_dir):
             os.makedirs(user_data_dir)
 
@@ -415,7 +416,15 @@ class GustoPunchApp(rumps.App):
         options.add_argument("--enable-logging")
         options.add_argument("--v=1")
 
-        driver = webdriver.Chrome(options=options)
+        # Use webdriver_manager to automatically download the correct driver
+        try:
+            # Use ChromeDriverManager to get the appropriate driver
+            ChromeDriverManager().install()  # This installs the driver in the cache
+            driver = webdriver.Chrome(options=options)
+        except Exception as e:
+            logger.warning(f"Error using ChromeDriverManager: {e}")
+            # Fallback to the default Chrome driver path
+            driver = webdriver.Chrome(options=options)
 
         # Update the navigator.webdriver flag to help avoid detection
         driver.execute_script(
@@ -561,20 +570,16 @@ class GustoPunchApp(rumps.App):
                     return True
                 except TimeoutException:
                     logger.error("Could not verify successful login")
-                    driver.save_screenshot(
-                        os.path.expanduser("~/.gusto_clock_debug.png")
-                    )
                     return False
 
             except TimeoutException:
-                logger.error("Could not find password field")
-                driver.save_screenshot(os.path.expanduser("~/.gusto_clock_debug.png"))
+                
                 return False
 
         except Exception as e:
             logger.error(f"Error during login: {e}")
             try:
-                driver.save_screenshot(os.path.expanduser("~/.gusto_clock_debug.png"))
+                logger.error("Error during login")
             except Exception:
                 pass
             rumps.alert(f"Error during login: {e}")
@@ -584,7 +589,7 @@ class GustoPunchApp(rumps.App):
         """Menu callback for manual status check"""
         if not self.session_active and not self.init_browser_session():
             rumps.notification(
-                "Gusto Clock",
+                "Gusto Punch",
                 "Error",
                 "Failed to initialize browser session",
                 sound=False,
@@ -593,7 +598,7 @@ class GustoPunchApp(rumps.App):
 
         self.check_status()
         rumps.notification(
-            "Gusto Clock", "Status", f"Currently clocked {self.status}", sound=False
+            "Gusto Punch", "Status", f"Currently clocked {self.status}", sound=False
         )
 
     def check_status(self):
@@ -694,13 +699,13 @@ class GustoPunchApp(rumps.App):
 
                 action_text = "in" if action_type == "in" else "out"
                 self.notification = rumps.notification(
-                    "Gusto Clock", "Status", f"Clocking {action_text}...", sound=False
+                    "Gusto Punch", "Status", f"Clocking {action_text}...", sound=False
                 )
 
                 if not self.session_active:
                     if not self.init_browser_session():
                         rumps.notification(
-                            "Gusto Clock",
+                            "Gusto Punch",
                             "Error",
                             "Failed to initialize browser session",
                             sound=False,
@@ -715,7 +720,7 @@ class GustoPunchApp(rumps.App):
                     # Try to refresh and login again if needed
                     if not self.init_browser_session():
                         rumps.notification(
-                            "Gusto Clock",
+                            "Gusto Punch",
                             "Error",
                             "Failed to navigate to dashboard",
                             sound=False,
@@ -754,7 +759,7 @@ class GustoPunchApp(rumps.App):
                     self.update_menu_state()
 
                     rumps.notification(
-                        "Gusto Clock",
+                        "Gusto Punch",
                         "Success",
                         f"Clocked {action_text} successfully",
                         sound=False,
@@ -763,11 +768,11 @@ class GustoPunchApp(rumps.App):
                     # Button not found
                     if action_type == "in" and self.status == "in":
                         rumps.notification(
-                            "Gusto Clock", "Info", "Already clocked in", sound=False
+                            "Gusto Punch", "Info", "Already clocked in", sound=False
                         )
                     elif action_type == "out" and self.status == "out":
                         rumps.notification(
-                            "Gusto Clock", "Info", "Already clocked out", sound=False
+                            "Gusto Punch", "Info", "Already clocked out", sound=False
                         )
                     else:
                         rumps.alert(f"Could not find clock {action_text} button")
