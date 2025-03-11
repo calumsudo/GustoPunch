@@ -12,6 +12,9 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import TimeoutException, WebDriverException, NoSuchElementException
 from webdriver_manager.chrome import ChromeDriverManager
+import sys
+import shutil
+import tempfile
 
 # Set up logging
 logging.basicConfig(
@@ -36,6 +39,7 @@ class GustoPunchApp(rumps.App):
         self.driver = None
         self.driver_lock = threading.Lock()
         self.session_active = False
+        self.chromedriver_path = None  # Will store the ChromeDriver path
 
         # Create the clock action items
         self.clock_in_item = rumps.MenuItem("Clock In", callback=self.clock_in)
@@ -465,14 +469,40 @@ class GustoPunchApp(rumps.App):
         options.add_argument("--enable-logging")
         options.add_argument("--v=1")
 
-        # Use webdriver_manager to automatically download the correct driver
+        # Use a better approach for finding and managing ChromeDriver
         try:
-            # Use ChromeDriverManager to get the appropriate driver
-            ChromeDriverManager().install()  # This installs the driver in the cache
-            driver = webdriver.Chrome(options=options)
+            # First try to use self.chromedriver_path if already set
+            if self.chromedriver_path and os.path.exists(self.chromedriver_path):
+                logger.info(f"Using existing ChromeDriver at {self.chromedriver_path}")
+                driver = webdriver.Chrome(executable_path=self.chromedriver_path, options=options)
+            else:
+                # Otherwise, try to install and use ChromeDriverManager
+                if getattr(sys, 'frozen', False):
+                    # For bundled app, install ChromeDriver to a writable location
+                    app_path = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    driver_path = os.path.join(app_path, 'chromedriver')
+                    
+                    # Check if we need to install chromedriver
+                    if not os.path.exists(driver_path):
+                        # Use a temporary directory for initial download
+                        with tempfile.TemporaryDirectory() as tmp_dir:
+                            logger.info(f"Installing ChromeDriver to {driver_path}")
+                            temp_driver_path = ChromeDriverManager(path=tmp_dir).install()
+                            # Copy it to our app directory
+                            shutil.copy2(temp_driver_path, driver_path)
+                    
+                    # Make executable
+                    os.chmod(driver_path, 0o755)
+                    self.chromedriver_path = driver_path
+                    driver = webdriver.Chrome(executable_path=driver_path, options=options)
+                else:
+                    # For development environment, use ChromeDriverManager directly
+                    driver_path = ChromeDriverManager().install()
+                    self.chromedriver_path = driver_path
+                    driver = webdriver.Chrome(executable_path=driver_path, options=options)
         except Exception as e:
             logger.warning(f"Error using ChromeDriverManager: {e}")
-            # Fallback to the default Chrome driver path
+            # Last resort - try default Chrome driver
             driver = webdriver.Chrome(options=options)
 
         # Update the navigator.webdriver flag to help avoid detection
