@@ -16,11 +16,10 @@ GustoPunch uses a headless Chrome browser to interact with Gusto's web interface
 
 Perfect for employees who need to track time in Gusto but want a more efficient workflow without constantly logging into the web portal.
 
+<img width="162" alt="Screenshot 2025-03-10 at 11 29 55 PM" src="https://github.com/user-attachments/assets/07a6635d-260a-43a1-af80-dffa0458ccd7" />
+
+<img width="165" alt="Screenshot 2025-03-10 at 11 27 36 PM" src="https://github.com/user-attachments/assets/a120657b-2b22-49c2-a6bf-bf982029d09e" />
+
+<img width="376" alt="Screenshot 2025-03-10 at 11 00 24 PM" src="https://github.com/user-attachments/assets/e955cf2a-2f26-4448-9221-172d52e61eae" />
 
 
-![Screenshot 2025-03-10 at 11.27.36 PM.png](/assets/Screenshot 2025-03-10 at 11.27.36 PM.png)![Screenshot 2025-03-10 at 11.29.55 PM.png](/assets/Screenshot 2025-03-10 at 11.29.55 PM.png)
-
-
-
-
-![Screenshot 2025-03-10 at 11.00.24 PM.png](/assets/Screenshot 2025-03-10 at 11.00.24 PM.png)
